@@ -83,6 +83,10 @@ $('search').addEventListener('input',renderNav);
 $('reset').onclick=()=>{states.delete(active.id);renderConditions();renderMaterials();$('status').textContent='本事项的选择已重置。';};
 $('share').onclick=()=>copyText(`${location.origin}${location.pathname}#${active.id}`,'事项链接已复制，不包含你的材料选择。');
 $('copy-question').onclick=()=>copyText(question(),'咨询问题已复制，可回到 TeleAgent 中发送。');
+document.querySelectorAll('[data-service]').forEach(link=>link.addEventListener('click',event=>{
+  event.preventDefault();active=DATA.services.find(s=>s.id===link.dataset.service);$('search').value='';history.replaceState(null,'',`#${active.id}`);render();
+  $('service-title').focus({preventScroll:true});$('service-detail').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+}));
 window.addEventListener('hashchange',()=>{active=DATA.services.find(s=>s.id===location.hash.slice(1))||DATA.services[0];render();});
 const levelNames={official_body:'正文已收录',official_entry:'入口或附件目录',official_image_excerpt:'校历原图摘录'};
 $('official-count').textContent=`${DATA.official_library.length}条官网资料 · 来源可追溯`;

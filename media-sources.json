@@ -1,0 +1,37 @@
+{
+  "checked_at": "2026-11-14",
+  "rights_note": "校徽与照片来源于学校官网，著作权归原权利人；未发现开放许可声明。仅用于本学生服务作品的学校识别与校园展示，不表示学校主办或背书。",
+  "assets": [
+    {
+      "source_page": "https://www.jxpu.edu.cn/xxgk/xxxh.htm",
+      "source_image": "https://www.jxpu.edu.cn/virtual_attach_file.vsb?afc=5olMCVnmW2U4MknQNCbnmNPMRM7MN-qsol-DU4f7nl-sM7L0gihFp2hmCIa0oSyYUShRMYyPL7QfM4-iMRGZMm-4UzU4U8QRLmvYM4nRMznFL4n7MlUPMNQFLzMVMl-Jv2bjo4OeoDXD62L0qIbtpYyxLYyxLYbw62p8c&oid=1439972273&e=.png",
+      "original_sha256": "13af61a17d5d18e0880accda7831358084c117db951f3cfe651e03787901dde8",
+      "processing": "校徽原文件保留；校门照片等比缩小、转WebP，未改写画面或校名。",
+      "files": [
+        {
+          "path": "media/jxpu-emblem.png",
+          "sha256": "13af61a17d5d18e0880accda7831358084c117db951f3cfe651e03787901dde8",
+          "bytes": 81499
+        }
+      ]
+    },
+    {
+      "source_page": "https://www.jxpu.edu.cn/xyfg/lxxq.htm",
+      "source_image": "https://www.jxpu.edu.cn/images/26/07/24/1ewrjux435/1.jpg",
+      "original_sha256": "d6e50ee3c4f13177da68b261fb74854e5bdc42630a64380769b8b29968f473d2",
+      "processing": "校徽原文件保留；校门照片等比缩小、转WebP，未改写画面或校名。",
+      "files": [
+        {
+          "path": "media/lianxi-gate-720.webp",
+          "sha256": "fd99858f849748d7faf67326375f7c65245c9cb120f5e0613af32ef7dfe46ded",
+          "bytes": 46990
+        },
+        {
+          "path": "media/lianxi-gate-1440.webp",
+          "sha256": "431f8a2b22cef4f333e864c23e6d6e4dad31a8085b7cdb7ecb4d7bbda988d169",
+          "bytes": 149908
+        }
+      ]
+    }
+  ]
+}
