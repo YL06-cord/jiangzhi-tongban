@@ -70,7 +70,12 @@ function renderSources(){
 function renderActions(){
   const guide=DATA.actions.services[active.id];$('next-action').textContent=guide.first;
   const links=$('action-links');links.replaceChildren();
-  for(const entry of guide.links){const a=el('a',entry.label+' ↗');a.href=entry.url;a.target='_blank';a.rel='noopener noreferrer';links.append(a);}
+  for(const entry of guide.links){
+    const localLabel={S6:'查看补办表说明',O05:'查看学院与教学部门目录'}[entry.source_id];
+    if(localLabel){const b=el('button',localLabel);b.type='button';b.onclick=()=>openSource(entry.source_id);links.append(b);}
+    else{const a=el('a',entry.label+' ↗');a.href=entry.url;a.target='_blank';a.rel='noopener noreferrer';links.append(a);}
+  }
+  $('action-status').textContent='';
   const facts=$('action-facts');facts.replaceChildren();
   for(const [label,value] of [['先找谁',guide.who],['去哪办',guide.where],['什么时候',guide.when]]){const row=el('div');row.append(el('dt',label),el('dd',value));facts.append(row);}
   $('contact-details').hidden=!guide.contact;$('contact-details').open=false;$('contact-body').replaceChildren();

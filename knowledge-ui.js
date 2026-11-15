@@ -3,22 +3,29 @@ let knowledge,loadingKnowledge,searchSequence=0,resultLimit=8,currentResults,cur
 const sourceLabel=d=>d.kind==='handbook'?`学生手册 · ${d.printed?'印刷第'+d.printed+'页 / ':''}PDF第${d.page}页`:`学校官网 · ${d.published||'未标发布日期'}${d.document_date?' · 正文落款 '+d.document_date:''}`;
 async function loadKnowledge(){
  if(knowledge)return knowledge;if(loadingKnowledge)return loadingKnowledge;
- loadingKnowledge=(async()=>{const response=await fetch('knowledge.json');if(!response.ok)throw Error('load');const data=await response.json();if(!Array.isArray(data.documents)||data.documents.length!==270)throw Error('format');knowledge=data;
+ loadingKnowledge=(async()=>{const response=await fetch('knowledge.json?v=4.0.1');if(!response.ok)throw Error('load');const data=await response.json();if(!Array.isArray(data.documents)||data.documents.length!==270)throw Error('format');knowledge=data;
   for(const c of data.chapters){const option=el('option',c.title);option.value=String(c.pdf_start);$('chapter-select').append(option);}return data;
  })();try{return await loadingKnowledge;}finally{loadingKnowledge=null;}
 }
 function readerButton(id,label){const b=el('button',label,'text-button');b.type='button';b.onclick=()=>openSource(id);return b;}
 async function openSource(id){
  try{const data=await loadKnowledge();const d=data.documents.find(r=>r.id===id);if(!d)throw Error('missing');currentDocument=d;
-  const dialog=$('source-reader');if(!dialog.open)readerTrigger=document.activeElement;
+  $('action-status').textContent='';const dialog=$('source-reader');if(!dialog.open)readerTrigger=document.activeElement;
   $('reader-title').textContent=d.title;$('reader-meta').textContent=sourceLabel(d);$('reader-scope').textContent=d.scope+(d.checked?' · 资料读取 '+d.checked:'');$('reader-body').textContent=d.body;
-  $('reader-actions').replaceChildren();$('page-image-box').hidden=true;$('page-image').removeAttribute('src');$('image-error').hidden=true;
+  $('reader-actions').replaceChildren();$('reader-directory').replaceChildren();$('reader-directory').hidden=true;$('reader-status').textContent='';$('reader-copy-fallback').hidden=true;$('reader-help').hidden=d.kind==='handbook';$('reader-body').hidden=false;$('reader-note').hidden=true;$('page-image-box').hidden=true;$('page-image').removeAttribute('src');$('image-error').hidden=true;
   if(d.kind==='handbook'){
    const b=el('button','查看原页图片','quiet-button');b.type='button';b.onclick=()=>{const img=$('page-image');img.src=d.image;img.alt=`学生手册PDF第${d.page}页原页`;img.onerror=()=>{$('image-error').hidden=false;};$('page-image-box').hidden=false;};$('reader-actions').append(b);
    for(const [step,label] of [[-1,'上一页'],[1,'下一页']]){const btn=readerButton('H'+String(d.page+step).padStart(3,'0'),label);btn.disabled=d.page+step<1||d.page+step>253;$('reader-actions').append(btn);}
-  }else{const a=el('a','打开学校原网页 ↗','quiet-button');a.href=d.url;a.target='_blank';a.rel='noopener noreferrer';$('reader-actions').append(a);}
+  }else{
+   const a=el('a','打开学校原网页 ↗','quiet-button');a.href=d.url;a.target='_blank';a.rel='noopener noreferrer';
+   const copy=el('button','复制官网地址','quiet-button');copy.type='button';copy.onclick=()=>copyText(d.url,'官网地址已复制。','reader-status','reader-copy-fallback');$('reader-actions').append(a,copy);
+   if(d.id==='S6'){$('reader-note').hidden=false;$('reader-note').textContent='本站已收录表单发布页和附件名称，尚未取得申请表文件，不能在此下载或填写。请通过学校原网页获取；若打不开，可向辅导员或所在学院索取当前使用的补办换发表。';}
+   if(d.directory){$('reader-directory').hidden=false;$('reader-body').hidden=true;$('reader-note').hidden=false;$('reader-note').textContent=`以下 ${d.directory.length} 个单位来自学校教学部门目录，仅用于查找学院与部门，不代表办理窗口。链接保留学校公布的地址；部分为HTTP网页。`;
+    for(const entry of d.directory){const row=el('li');const link=el('a',entry.name+' ↗');link.href=entry.url;link.target='_blank';link.rel='noopener noreferrer';const b=el('button','复制地址','quiet-button');b.type='button';b.setAttribute('aria-label','复制'+entry.name+'地址');b.onclick=()=>copyText(entry.url,entry.name+'地址已复制。','reader-status','reader-copy-fallback');row.append(link,b);$('reader-directory').append(row);}
+   }
+  }
   $('reader-scroll').scrollTop=0;if(!dialog.open)dialog.showModal();$('reader-title').focus();
- }catch{$('knowledge-status').textContent='资料暂未加载成功，请检查网络后重试。';$('knowledge-results').hidden=false;}
+ }catch{$('knowledge-status').textContent='资料暂未加载成功，请检查网络后重试。';$('action-status').textContent='站内资料暂未加载成功，请检查网络后再次点击资料按钮。';$('knowledge-results').hidden=false;}
 }
 function renderSearchResults(){
  const {answers,documents,tokens}=currentResults;const box=$('search-documents');box.replaceChildren();const cards=$('answer-cards');cards.replaceChildren();
