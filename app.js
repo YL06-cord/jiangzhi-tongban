@@ -4,6 +4,7 @@ const DATA=window.CAMPUS_DATA;
 const $=id=>document.getElementById(id);
 const states=new Map();
 const savedItems=new Map();
+const saveFailures=new Set();
 const STORAGE_KEY='jiangzhi-checklists-v4';
 let restoreNotice='';
 
@@ -99,7 +100,7 @@ function question(){
   lines.push('请先核对原文和当前适用性，再说明下一步、需要补充或确认的材料，并给出来源；没有提到的材料请保留为未知。');return lines.join('\n');
 }
 $('search').addEventListener('input',renderNav);
-$('reset').onclick=()=>{states.delete(active.id);savedItems.delete(active.id);writeSaved();renderConditions();renderMaterials();renderSaved();$('status').textContent='本事项的选择和本机保存已重置。';};
+$('reset').onclick=()=>{states.delete(active.id);const previous=savedItems.get(active.id);savedItems.delete(active.id);const cleared=writeSaved();if(cleared)saveFailures.delete(active.id);else{if(previous)savedItems.set(active.id,previous);saveFailures.add(active.id);}renderConditions();renderMaterials();renderSaved();$('status').textContent=cleared?'本事项的选择和本机保存已重置。':'页面选择已重置，但本机保存未能清除；刷新后旧选择可能恢复。';};
 $('share').onclick=()=>copyText(`${location.origin}${location.pathname}#${active.id}`,'事项链接已复制，不包含你的材料选择。');
 $('copy-question').onclick=()=>copyText(question(),'咨询问题已复制，可回到 TeleAgent 中发送。');
 $('copy-office-question').onclick=()=>copyText(DATA.actions.services[active.id].question,'询问话术已复制，可发送给负责老师。','office-status','office-copy-fallback');
@@ -124,15 +125,15 @@ function restoreSaved(){
   for(const [id,entry] of data.items){const service=DATA.services.find(s=>s.id===id);if(!service||!entry||typeof entry!=='object')continue;const clean={profile:{},materials:{}};
    for(const [key,options] of Object.entries(service.profile_options||{}))if(options.includes(entry.profile?.[key]))clean.profile[key]=entry.profile[key];
    for(const material of service.materials)if(['have','missing','unknown'].includes(entry.materials?.[material.id]))clean.materials[material.id]=entry.materials[material.id];
-   states.set(id,clean);savedItems.set(id,{...clean,updated:typeof entry.updated==='string'?entry.updated:''});
+   states.set(id,clean);savedItems.set(id,{profile:{...clean.profile},materials:{...clean.materials},updated:typeof entry.updated==='string'?entry.updated:''});
   }
  }catch{restoreNotice='旧保存无法读取，未恢复；重新保存本项可建立新记录。';}
 }
 function writeSaved(){try{if(savedItems.size)localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,items:[...savedItems]}));else localStorage.removeItem(STORAGE_KEY);return true;}catch{$('save-status').textContent='此浏览器无法保存，请下载清单留存。';return false;}}
-function renderSaved(){const saved=savedItems.get(active.id);$('remove-checklist').hidden=!saved;$('save-checklist').textContent=saved?'更新本机保存':'保存本项到本机';$('save-status').textContent=saved?`本机已保存 · ${saved.updated}。修改本项会同步保存，请办理前重新核对。`:restoreNotice;}
-function persistSaved(){if(!savedItems.has(active.id))return;savedItems.set(active.id,{...state(),updated:new Date().toLocaleString('zh-CN')});if(writeSaved())renderSaved();}
-$('save-checklist').onclick=()=>{const previous=savedItems.get(active.id);savedItems.set(active.id,{...state(),updated:new Date().toLocaleString('zh-CN')});if(writeSaved()){restoreNotice='';renderSaved();}else{if(previous)savedItems.set(active.id,previous);else savedItems.delete(active.id);}};
-$('remove-checklist').onclick=()=>{const previous=savedItems.get(active.id);savedItems.delete(active.id);if(writeSaved()){renderSaved();$('save-status').textContent='已删除本机保存；当前页面选择仍保留。';}else savedItems.set(active.id,previous);};
+function renderSaved(){const saved=savedItems.get(active.id);$('remove-checklist').hidden=!saved;$('save-checklist').textContent=saved?'更新本机保存':'保存本项到本机';$('save-status').textContent=saveFailures.has(active.id)?'最近修改无法保存，请下载清单留存；刷新可能恢复旧选择。':saved?`本机已保存 · ${saved.updated}。修改本项会同步保存，请办理前重新核对。`:restoreNotice;}
+function persistSaved(){if(!savedItems.has(active.id))return;const previous=savedItems.get(active.id);savedItems.set(active.id,{profile:{...state().profile},materials:{...state().materials},updated:new Date().toLocaleString('zh-CN')});if(writeSaved())saveFailures.delete(active.id);else{savedItems.set(active.id,previous);saveFailures.add(active.id);}renderSaved();}
+$('save-checklist').onclick=()=>{const previous=savedItems.get(active.id);savedItems.set(active.id,{profile:{...state().profile},materials:{...state().materials},updated:new Date().toLocaleString('zh-CN')});if(writeSaved()){restoreNotice='';saveFailures.delete(active.id);}else{if(previous)savedItems.set(active.id,previous);else savedItems.delete(active.id);saveFailures.add(active.id);}renderSaved();};
+$('remove-checklist').onclick=()=>{const previous=savedItems.get(active.id);savedItems.delete(active.id);if(writeSaved()){saveFailures.delete(active.id);renderSaved();$('save-status').textContent='已删除本机保存；当前页面选择仍保留。';}else{savedItems.set(active.id,previous);saveFailures.add(active.id);$('save-status').textContent='本机保存未能删除，请检查浏览器存储权限后重试。';}};
 function checklist(){
  const lines=[`江职通办 · ${active.title}`,`整理时间：${new Date().toLocaleString('zh-CN')}`,'学生服务作品，非学校官方办事系统。','',`下一步：${DATA.actions.services[active.id].first}`];
  for(const [key,value] of Object.entries(state().profile))if(value!==undefined)lines.push(`${active.condition_labels[key]||'具体情况'}：${value}`);
