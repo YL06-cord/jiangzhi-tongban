@@ -61,17 +61,31 @@ function renderSources(){
     item.append(el('p',source.limitation,'source-meta'));box.append(item);
   }
 }
+function renderActions(){
+  const guide=DATA.actions.services[active.id];$('next-action').textContent=guide.first;
+  const links=$('action-links');links.replaceChildren();
+  for(const entry of guide.links){const a=el('a',entry.label+' ↗');a.href=entry.url;a.target='_blank';a.rel='noopener noreferrer';links.append(a);}
+  const facts=$('action-facts');facts.replaceChildren();
+  for(const [label,value] of [['先找谁',guide.who],['去哪办',guide.where],['什么时候',guide.when]]){const row=el('div');row.append(el('dt',label),el('dd',value));facts.append(row);}
+  $('contact-details').hidden=!guide.contact;$('contact-details').open=false;$('contact-body').replaceChildren();
+  if(guide.contact){const c=guide.contact;const phone=el('a',`${c.label}：${c.value}`);phone.href=c.href;const source=DATA.official_library.find(r=>r.id===c.source_id);const a=el('a','查看公开电话来源 ↗');a.href=source.url;a.target='_blank';a.rel='noopener noreferrer';$('contact-body').append(phone,el('p',c.note),a);}
+  $('office-status').textContent='';$('office-copy-fallback').hidden=true;
+  $('action-evidence').textContent=`入口与联系资料整理：${guide.checked_at} · 适用范围见下方依据。`;
+  const showCalendar=active.id==='S10-calendar';$('calendar-section').hidden=!showCalendar;
+  $('calendar-items').replaceChildren();
+  if(showCalendar)for(const item of DATA.actions.calendar.items){const row=el('div',undefined,'calendar-item');row.append(el('span',item.audience,'calendar-audience'),el('strong',item.label),el('span',item.date,'calendar-date'));$('calendar-items').append(row);}
+}
 function render(){
   renderNav();$('service-title').textContent=active.title;$('service-category').textContent=active.category;$('service-intro').textContent=active.intro;
   $('basis-note').textContent=active.material_basis==='handbook'?'以下依据所收录学生手册整理，部分流程标注为2024年。请先向所在学院或对应部门确认当前是否沿用，再安排办理。':'此处提供已收录的官方入口和需确认的问题。入口可访问不等于当期材料、资格或期限已经核实。';
-  renderConditions();const flow=$('workflow');flow.replaceChildren();
+  renderActions();renderConditions();const flow=$('workflow');flow.replaceChildren();
   active.workflow.forEach((step,index)=>{const li=el('li');const body=el('div');body.append(el('strong',step.actor),el('span',step.action));li.append(el('span',String(index+1),'step-index'),body);flow.append(li);});
   $('workflow-section').hidden=!active.workflow.length;
   renderMaterials();const gaps=$('gaps');gaps.replaceChildren(...active.gaps.map(t=>el('li',t)));renderSources();$('status').textContent='';$('copy-fallback').hidden=true;
 }
-async function copyText(text,success){
-  try{if(!navigator.clipboard)throw Error('unavailable');await navigator.clipboard.writeText(text);$('status').textContent=success;$('copy-fallback').hidden=true;}
-  catch{const box=$('copy-fallback');box.value=text;box.hidden=false;box.focus();box.select();$('status').textContent='自动复制不可用，请复制上方已选中的内容。';}
+async function copyText(text,success,statusId='status',fallbackId='copy-fallback'){
+  try{if(!navigator.clipboard)throw Error('unavailable');await navigator.clipboard.writeText(text);$(statusId).textContent=success;$(fallbackId).hidden=true;}
+  catch{const box=$(fallbackId);box.value=text;box.hidden=false;box.focus();box.select();$(statusId).textContent='自动复制不可用，请复制上方已选中的内容。';}
 }
 function question(){
   const current=state();const lines=[`请使用江职通办，帮我了解“${active.title}”。`];
@@ -83,14 +97,17 @@ $('search').addEventListener('input',renderNav);
 $('reset').onclick=()=>{states.delete(active.id);renderConditions();renderMaterials();$('status').textContent='本事项的选择已重置。';};
 $('share').onclick=()=>copyText(`${location.origin}${location.pathname}#${active.id}`,'事项链接已复制，不包含你的材料选择。');
 $('copy-question').onclick=()=>copyText(question(),'咨询问题已复制，可回到 TeleAgent 中发送。');
+$('copy-office-question').onclick=()=>copyText(DATA.actions.services[active.id].question,'询问话术已复制，可发送给负责老师。','office-status','office-copy-fallback');
 document.querySelectorAll('[data-service]').forEach(link=>link.addEventListener('click',event=>{
   event.preventDefault();active=DATA.services.find(s=>s.id===link.dataset.service);$('search').value='';history.replaceState(null,'',`#${active.id}`);render();
   $('service-title').focus({preventScroll:true});$('service-detail').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
 }));
-window.addEventListener('hashchange',()=>{active=DATA.services.find(s=>s.id===location.hash.slice(1))||DATA.services[0];render();});
-const levelNames={official_body:'正文已收录',official_entry:'入口或附件目录',official_image_excerpt:'校历原图摘录'};
+function followServiceHash(){const service=DATA.services.find(s=>s.id===location.hash.slice(1));if(!service)return;active=service;$('search').value='';render();$('service-title').focus({preventScroll:true});$('service-detail').scrollIntoView({behavior:'instant'});}
+window.addEventListener('hashchange',followServiceHash);
+const levelNames={official_body:'正文已收录',official_entry:'入口或附件目录',official_image_excerpt:'原图摘录'};
 $('official-count').textContent=`${DATA.official_library.length}条官网资料 · 来源可追溯`;
 for(const record of DATA.official_library){
- const item=el('div',undefined,'library-record');const a=el('a',record.title+' ↗');a.href=record.url;a.target='_blank';a.rel='noopener noreferrer';item.append(el('span',levelNames[record.level],'source-kind'),a,el('p',`${record.publisher} · ${record.published_at||'未标发布日期'}${record.document_date?` · 正文落款 ${record.document_date}`:''}`,'source-meta'),el('p',record.scope,'source-meta'));$('official-library').append(item);
+ const item=el('div',undefined,'library-record');const a=el('a',record.title+' ↗');a.href=record.url;a.target='_blank';a.rel='noopener noreferrer';item.append(el('span',levelNames[record.level],'source-kind'),a,el('p',`${record.publisher} · ${record.published_at||'未标发布日期'}${record.document_date?` · 正文落款 ${record.document_date}`:''} · 读取 ${record.checked_at}`,'source-meta'),el('p',record.scope,'source-meta'));$('official-library').append(item);
 }
 render();
+if(DATA.services.some(s=>s.id===location.hash.slice(1)))requestAnimationFrame(followServiceHash);
