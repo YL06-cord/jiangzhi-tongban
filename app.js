@@ -1,8 +1,12 @@
-/* No remote APIs, account data, persistence, or application submission. */
+/* Local source search and opt-in checklist storage; no application submission. */
 'use strict';
 const DATA=window.CAMPUS_DATA;
 const $=id=>document.getElementById(id);
 const states=new Map();
+const savedItems=new Map();
+const STORAGE_KEY='jiangzhi-checklists-v4';
+let restoreNotice='';
+
 let active=DATA.services.find(s=>s.id===location.hash.slice(1))||DATA.services[0];
 const el=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
 function state(){if(!states.has(active.id))states.set(active.id,{profile:{},materials:{}});return states.get(active.id);}
@@ -10,7 +14,7 @@ function renderNav(){
   const query=$('search').value.trim().toLowerCase();
   const list=$('service-list');list.replaceChildren();let group='';let count=0;
   for(const s of DATA.services){
-    if(query&&!`${s.title} ${s.keywords} ${s.category}`.toLowerCase().includes(query))continue;
+    if(query&&!`${s.title} ${s.keywords}`.toLowerCase().includes(query)&&!CampusSearch.terms(query).some(t=>`${s.title} ${s.keywords}`.includes(t)))continue;
     count++;
     if(group!==s.category){group=s.category;list.append(el('p',group,'nav-group'));}
     const b=el('button',undefined,'service-button');b.type='button';b.setAttribute('aria-current',String(active.id===s.id));
@@ -26,7 +30,7 @@ function renderConditions(){
     const first=el('option','请选择');first.value='';select.append(first);
     options.forEach((value,index)=>{const option=el('option',String(value));option.value=String(index);select.append(option);});
     const value=state().profile[key];select.value=value===undefined?'':String(options.indexOf(value));
-    select.onchange=()=>{const current=state();current.profile[key]=select.value===''?undefined:options[Number(select.value)];current.materials={};renderMaterials();};
+    select.onchange=()=>{const current=state();current.profile[key]=select.value===''?undefined:options[Number(select.value)];current.materials={};renderMaterials();persistSaved();};
     label.append(select);box.append(label);
   }
 }
@@ -39,7 +43,7 @@ function renderMaterials(){
     const row=el('label',undefined,'material');row.append(el('span',m.label,'material-title'));
     const select=el('select');select.setAttribute('aria-label',m.label);
     for(const [value,label] of [['unknown','未说明'],['have','已备有'],['missing','尚未备有']]){const o=el('option',label);o.value=value;select.append(o);}
-    select.value=current.materials[m.id]||'unknown';select.onchange=()=>{current.materials[m.id]=select.value;renderResult();};row.append(select);list.append(row);
+    select.value=current.materials[m.id]||'unknown';select.onchange=()=>{current.materials[m.id]=select.value;renderResult();persistSaved();};row.append(select);list.append(row);
   }
   if(!active.materials.length)list.append(el('p','现有资料不足以列出完整材料清单，请先确认下方问题。','muted small'));
   renderResult();
@@ -57,6 +61,7 @@ function renderSources(){
     if(source.url){const a=el('a',source.title+' ↗');a.href=source.url;a.target='_blank';a.rel='noopener noreferrer';title.append(a);}else title.textContent='《学生手册》'+source.title;
     item.append(el('span',source.url?'学校官网':'学生手册','source-kind'),title);
     const parts=[];if(source.printed_page)parts.push(`印刷第${source.printed_page}页 / PDF第${source.pdf_page}页`);if(source.published_at)parts.push(`资料标注：${source.published_at}`);if(source.document_date)parts.push(`正文落款：${source.document_date}`);item.append(el('p',parts.join(' · '),'source-meta'));
+    if(source.pdf_page){const b=el('button','阅读本页全文与原图','text-button');b.type='button';b.onclick=()=>openSource('H'+String(source.pdf_page).padStart(3,'0'));item.append(b);}
     if(source.excerpt_verified&&source.excerpt){const details=el('details');details.append(el('summary','查看所收录摘录'),el('blockquote',source.excerpt));item.append(details);}
     item.append(el('p',source.limitation,'source-meta'));box.append(item);
   }
@@ -81,7 +86,7 @@ function render(){
   renderActions();renderConditions();const flow=$('workflow');flow.replaceChildren();
   active.workflow.forEach((step,index)=>{const li=el('li');const body=el('div');body.append(el('strong',step.actor),el('span',step.action));li.append(el('span',String(index+1),'step-index'),body);flow.append(li);});
   $('workflow-section').hidden=!active.workflow.length;
-  renderMaterials();const gaps=$('gaps');gaps.replaceChildren(...active.gaps.map(t=>el('li',t)));renderSources();$('status').textContent='';$('copy-fallback').hidden=true;
+  renderMaterials();renderSaved();const gaps=$('gaps');gaps.replaceChildren(...active.gaps.map(t=>el('li',t)));renderSources();$('status').textContent='';$('copy-fallback').hidden=true;
 }
 async function copyText(text,success,statusId='status',fallbackId='copy-fallback'){
   try{if(!navigator.clipboard)throw Error('unavailable');await navigator.clipboard.writeText(text);$(statusId).textContent=success;$(fallbackId).hidden=true;}
@@ -94,7 +99,7 @@ function question(){
   lines.push('请先核对原文和当前适用性，再说明下一步、需要补充或确认的材料，并给出来源；没有提到的材料请保留为未知。');return lines.join('\n');
 }
 $('search').addEventListener('input',renderNav);
-$('reset').onclick=()=>{states.delete(active.id);renderConditions();renderMaterials();$('status').textContent='本事项的选择已重置。';};
+$('reset').onclick=()=>{states.delete(active.id);savedItems.delete(active.id);writeSaved();renderConditions();renderMaterials();renderSaved();$('status').textContent='本事项的选择和本机保存已重置。';};
 $('share').onclick=()=>copyText(`${location.origin}${location.pathname}#${active.id}`,'事项链接已复制，不包含你的材料选择。');
 $('copy-question').onclick=()=>copyText(question(),'咨询问题已复制，可回到 TeleAgent 中发送。');
 $('copy-office-question').onclick=()=>copyText(DATA.actions.services[active.id].question,'询问话术已复制，可发送给负责老师。','office-status','office-copy-fallback');
@@ -109,5 +114,33 @@ $('official-count').textContent=`${DATA.official_library.length}条官网资料 
 for(const record of DATA.official_library){
  const item=el('div',undefined,'library-record');const a=el('a',record.title+' ↗');a.href=record.url;a.target='_blank';a.rel='noopener noreferrer';item.append(el('span',levelNames[record.level],'source-kind'),a,el('p',`${record.publisher} · ${record.published_at||'未标发布日期'}${record.document_date?` · 正文落款 ${record.document_date}`:''} · 读取 ${record.checked_at}`,'source-meta'),el('p',record.scope,'source-meta'));$('official-library').append(item);
 }
+restoreSaved();
 render();
 if(DATA.services.some(s=>s.id===location.hash.slice(1)))requestAnimationFrame(followServiceHash);
+
+function selectService(id){const s=DATA.services.find(s=>s.id===id);if(!s)return;active=s;$('search').value='';history.replaceState(null,'',`#${id}`);render();$('service-title').focus({preventScroll:true});$('service-detail').scrollIntoView({behavior:'instant'});}
+function restoreSaved(){
+ try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;const data=JSON.parse(raw);if(data.version!==1||!Array.isArray(data.items))throw Error('version');
+  for(const [id,entry] of data.items){const service=DATA.services.find(s=>s.id===id);if(!service||!entry||typeof entry!=='object')continue;const clean={profile:{},materials:{}};
+   for(const [key,options] of Object.entries(service.profile_options||{}))if(options.includes(entry.profile?.[key]))clean.profile[key]=entry.profile[key];
+   for(const material of service.materials)if(['have','missing','unknown'].includes(entry.materials?.[material.id]))clean.materials[material.id]=entry.materials[material.id];
+   states.set(id,clean);savedItems.set(id,{...clean,updated:typeof entry.updated==='string'?entry.updated:''});
+  }
+ }catch{restoreNotice='旧保存无法读取，未恢复；重新保存本项可建立新记录。';}
+}
+function writeSaved(){try{if(savedItems.size)localStorage.setItem(STORAGE_KEY,JSON.stringify({version:1,items:[...savedItems]}));else localStorage.removeItem(STORAGE_KEY);return true;}catch{$('save-status').textContent='此浏览器无法保存，请下载清单留存。';return false;}}
+function renderSaved(){const saved=savedItems.get(active.id);$('remove-checklist').hidden=!saved;$('save-checklist').textContent=saved?'更新本机保存':'保存本项到本机';$('save-status').textContent=saved?`本机已保存 · ${saved.updated}。修改本项会同步保存，请办理前重新核对。`:restoreNotice;}
+function persistSaved(){if(!savedItems.has(active.id))return;savedItems.set(active.id,{...state(),updated:new Date().toLocaleString('zh-CN')});if(writeSaved())renderSaved();}
+$('save-checklist').onclick=()=>{const previous=savedItems.get(active.id);savedItems.set(active.id,{...state(),updated:new Date().toLocaleString('zh-CN')});if(writeSaved()){restoreNotice='';renderSaved();}else{if(previous)savedItems.set(active.id,previous);else savedItems.delete(active.id);}};
+$('remove-checklist').onclick=()=>{const previous=savedItems.get(active.id);savedItems.delete(active.id);if(writeSaved()){renderSaved();$('save-status').textContent='已删除本机保存；当前页面选择仍保留。';}else savedItems.set(active.id,previous);};
+function checklist(){
+ const lines=[`江职通办 · ${active.title}`,`整理时间：${new Date().toLocaleString('zh-CN')}`,'学生服务作品，非学校官方办事系统。','',`下一步：${DATA.actions.services[active.id].first}`];
+ for(const [key,value] of Object.entries(state().profile))if(value!==undefined)lines.push(`${active.condition_labels[key]||'具体情况'}：${value}`);
+ lines.push('','材料对照（不代表当前材料已齐全）：');
+ for(const m of active.materials){if(m.when&&state().profile[m.when.field]===undefined){lines.push(`[待判断适用] ${m.label}`);continue;}if(m.when&&state().profile[m.when.field]!==m.when.equals)continue;lines.push(`[${{have:'已备有',missing:'尚未备有',unknown:'未说明'}[state().materials[m.id]||'unknown']}] ${m.label}`);}
+ if(!active.materials.length)lines.push('现有资料不足以列出完整清单，请向对应部门确认。');
+ lines.push('','办理前确认：',...active.gaps.map(t=>'• '+t),'','依据：');
+ for(const s of active.sources)lines.push(s.title+(s.pdf_page?`（印刷第${s.printed_page}页 / PDF第${s.pdf_page}页）`:''),s.url||'',s.limitation||'');
+ lines.push('',`事项链接：${location.origin}${location.pathname}#${active.id}`,'手册和历史通知不等于当前受理要求；本清单不上传、不提交申请。');return lines.join('\n');
+}
+$('download-checklist').onclick=()=>{const url=URL.createObjectURL(new Blob(['\ufeff'+checklist()],{type:'text/plain;charset=utf-8'}));const a=el('a');a.href=url;a.download=`江职通办-${active.title}-办事清单.txt`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);$('save-status').textContent='已发起下载，请查看浏览器下载记录。';};
